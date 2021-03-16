@@ -21,6 +21,7 @@ FLOWS = [
     "ambiclimate",
     "ambient_station",
     "apple_tv",
+    "aqualogic",
     "arcam_fmj",
     "asuswrt",
     "atag",
