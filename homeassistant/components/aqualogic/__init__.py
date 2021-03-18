@@ -1,69 +1,70 @@
-"""Support for AquaLogic devices."""
+"""The AquaLogic integration."""
+import asyncio
 from datetime import timedelta
 import logging
 import threading
 import time
 
 from aqualogic.core import AquaLogic
-import voluptuous as vol
 
-from homeassistant.const import (
-    CONF_DEVICE,
-    CONF_HOST,
-    CONF_PATH,
-    CONF_PORT,
-    EVENT_HOMEASSISTANT_START,
-    EVENT_HOMEASSISTANT_STOP,
-)
-from homeassistant.helpers import config_validation as cv
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST, CONF_PATH, CONF_PORT, CONF_PROTOCOL
+from homeassistant.core import HomeAssistant
+
+from .const import DOMAIN, PROTOCOL_SOCKET
+
+UPDATE_TOPIC = f"{DOMAIN}_update"
+
+PLATFORMS = ["sensor", "switch"]
 
 _LOGGER = logging.getLogger(__name__)
 
-DOMAIN = "aqualogic"
-UPDATE_TOPIC = f"{DOMAIN}_update"
-CONF_UNIT = "unit"
 RECONNECT_INTERVAL = timedelta(seconds=10)
 
-CONFIG_SCHEMA = vol.Schema(
-    {
-        DOMAIN: vol.Schema(
-            {
-                vol.Optional(CONF_DEVICE, default="socket"): cv.string,
-                vol.Optional(CONF_HOST, default="localhost"): cv.string,
-                vol.Optional(CONF_PORT, default=23): cv.port,
-                vol.Optional(CONF_PATH, default="/dev/ttyUSB0"): cv.string,
-            }
-        )
-    },
-    extra=vol.ALLOW_EXTRA,
-)
 
-
-def setup(hass, config):
-    """Set up AquaLogic platform."""
-    device = config[DOMAIN][CONF_DEVICE]
-    host = config[DOMAIN][CONF_HOST]
-    port = config[DOMAIN][CONF_PORT]
-    path = config[DOMAIN][CONF_PATH]
-    processor = AquaLogicProcessor(hass, device, host, port, path)
-    hass.data[DOMAIN] = processor
-    hass.bus.listen_once(EVENT_HOMEASSISTANT_START, processor.start_listen)
-    hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, processor.shutdown)
-    _LOGGER.debug("AquaLogicProcessor initialized")
+async def async_setup(hass: HomeAssistant, config: dict):
+    """Set up the AquaLogic component."""
     return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+    """Set up AquaLogic from a config entry."""
+
+    processor = AquaLogicProcessor(hass, entry.data)
+    hass.data[DOMAIN] = processor
+
+    for platform in PLATFORMS:
+        hass.async_create_task(
+            hass.config_entries.async_forward_entry_setup(entry, platform)
+        )
+
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
+    """Unload a config entry."""
+    unload_ok = all(
+        await asyncio.gather(
+            *[
+                hass.config_entries.async_forward_entry_unload(entry, platform)
+                for platform in PLATFORMS
+            ]
+        )
+    )
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id)
+
+    return unload_ok
 
 
 class AquaLogicProcessor(threading.Thread):
     """AquaLogic event processor thread."""
 
-    def __init__(self, hass, device, host, port, path):
+    def __init__(self, hass, conf):
         """Initialize the data object."""
         super().__init__(daemon=True)
         self._hass = hass
-        self._device = device
-        self._host = host
-        self._port = port
-        self._path = path
+        self._conf = conf
         self._shutdown = False
         self._panel = None
 
@@ -86,19 +87,23 @@ class AquaLogicProcessor(threading.Thread):
 
         while True:
             self._panel = AquaLogic()
-            if self._device == "socket":
-                _LOGGER.info("Connecting to %s:%d", self._host, self._port)
-                self._panel.connect_socket(self._host, self._port)
+
+            if self._conf[CONF_PROTOCOL] == PROTOCOL_SOCKET:
+                host = self._conf[CONF_HOST]
+                port = self._conf[CONF_PORT]
+                _LOGGER.info("Connecting to %s:%d", host, port)
+                self._panel.connect_socket(host, port)
             else:
-                _LOGGER.info("Connecting to %s", self._path)
-                self._panel.connect_serial(self._path)
+                path = self._conf[CONF_PATH]
+                _LOGGER.info("Connecting to %s", path)
+                self._panel.connect_serial(path)
 
             self._panel.process(self.data_changed)
 
             if self._shutdown:
                 return
 
-            _LOGGER.error("Connection to %s:%d lost", self._host, self._port)
+            _LOGGER.error("Connection lost")
             time.sleep(RECONNECT_INTERVAL.seconds)
 
     @property

@@ -3,11 +3,11 @@ import logging
 from socket import gaierror
 
 from aqualogic.core import AquaLogic
+from serial.serialutil import SerialException
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PATH, CONF_PORT, CONF_PROTOCOL
-from homeassistant.core import callback
 
 from .const import (  # pylint: disable=unused-import
     DEFAULT_HOST,
@@ -30,12 +30,6 @@ class AquaLogicFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self):
         """Initialize AquaLogic ConfigFlow."""
         self.protocol = None
-
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry):
-        """Get the options flow for AquaLogic."""
-        return AquaLogicOptionsFlowHandler(config_entry)
 
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
@@ -83,6 +77,8 @@ class AquaLogicFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 )
             except ConnectionRefusedError:
                 errors["base"] = "cannot_connect"
+            except SerialException:
+                errors["base"] = "cannot_connect"
             except gaierror:
                 errors["base"] = "invalid_host"
             except Exception:  # pylint: disable=broad-except
@@ -108,14 +104,6 @@ class AquaLogicFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=schema,
             errors=errors,
         )
-
-
-class AquaLogicOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle AquaLogic options."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry):
-        """Initialize AquaLogic options flow."""
-        pass
 
 
 def _device_already_added(current_entries, user_input, protocol):

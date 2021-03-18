@@ -1,10 +1,6 @@
 """Support for AquaLogic sensors."""
 
-import voluptuous as vol
-
-from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.const import (
-    CONF_MONITORED_CONDITIONS,
     PERCENTAGE,
     POWER_WATT,
     STATE_OFF,
@@ -13,7 +9,6 @@ from homeassistant.const import (
     TEMP_FAHRENHEIT,
 )
 from homeassistant.core import callback
-import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity import Entity
 
 from . import DOMAIN, UPDATE_TOPIC
@@ -44,21 +39,13 @@ SENSOR_TYPES = {
     ],
 }
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_MONITORED_CONDITIONS, default=list(SENSOR_TYPES)): vol.All(
-            cv.ensure_list, [vol.In(SENSOR_TYPES)]
-        )
-    }
-)
 
-
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
+async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the sensor platform."""
     sensors = []
 
     processor = hass.data[DOMAIN]
-    for sensor_type in config[CONF_MONITORED_CONDITIONS]:
+    for sensor_type in SENSOR_TYPES:
         sensors.append(AquaLogicSensor(processor, sensor_type))
 
     async_add_entities(sensors)
