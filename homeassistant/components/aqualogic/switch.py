@@ -3,7 +3,7 @@ from aqualogic.core import States
 
 from homeassistant.components.switch import SwitchEntity
 
-from . import DOMAIN, UPDATE_TOPIC
+from .const import DOMAIN, PROCESSOR, UPDATE_TOPIC
 
 SWITCH_TYPES = {
     "lights": ["Lights", States.LIGHTS],
@@ -32,11 +32,13 @@ SWITCH_TYPES = {
 }
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
+async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up the switches."""
     switches = []
 
-    processor = hass.data[DOMAIN]
+    data = hass.data[DOMAIN][config_entry.entry_id]
+    processor = data[PROCESSOR]
+
     for switch_type in SWITCH_TYPES:
         switches.append(AquaLogicSwitch(processor, switch_type))
 

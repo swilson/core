@@ -11,7 +11,7 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.helpers.entity import Entity
 
-from . import DOMAIN, UPDATE_TOPIC
+from .const import DOMAIN, PROCESSOR, UPDATE_TOPIC
 
 TEMP_UNITS = [TEMP_CELSIUS, TEMP_FAHRENHEIT]
 PERCENT_UNITS = [PERCENTAGE, PERCENTAGE]
@@ -40,11 +40,13 @@ SENSOR_TYPES = {
 }
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
+async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up the sensor platform."""
     sensors = []
 
-    processor = hass.data[DOMAIN]
+    data = hass.data[DOMAIN][config_entry.entry_id]
+    processor = data[PROCESSOR]
+
     for sensor_type in SENSOR_TYPES:
         sensors.append(AquaLogicSensor(processor, sensor_type))
 

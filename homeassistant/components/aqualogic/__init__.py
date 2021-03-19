@@ -8,12 +8,22 @@ import time
 from aqualogic.core import AquaLogic
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PATH, CONF_PORT, CONF_PROTOCOL
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PATH,
+    CONF_PORT,
+    CONF_PROTOCOL,
+    CONF_RESOURCES,
+)
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, PROTOCOL_SOCKET
-
-UPDATE_TOPIC = f"{DOMAIN}_update"
+from .const import (
+    DOMAIN,
+    PROCESSOR,
+    PROTOCOL_SOCKET,
+    UNDO_UPDATE_LISTENER,
+    UPDATE_TOPIC,
+)
 
 PLATFORMS = ["sensor", "switch"]
 
@@ -24,6 +34,8 @@ RECONNECT_INTERVAL = timedelta(seconds=10)
 
 async def async_setup(hass: HomeAssistant, config: dict):
     """Set up the AquaLogic component."""
+    hass.data.setdefault(DOMAIN, {})
+
     return True
 
 
@@ -31,7 +43,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Set up AquaLogic from a config entry."""
 
     processor = AquaLogicProcessor(hass, entry.data)
-    hass.data[DOMAIN] = processor
+
+    undo_listener = entry.add_update_listener(_async_update_listener)
+
+    hass.data[DOMAIN][entry.entry_id] = {
+        PROCESSOR: processor,
+        UNDO_UPDATE_LISTENER: undo_listener,
+    }
 
     for platform in PLATFORMS:
         hass.async_create_task(
@@ -39,6 +57,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         )
 
     return True
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry):
+    """Handle options update."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+def find_resources_in_config_entry(config_entry):
+    """Find the configured resources in the config entry."""
+    if CONF_RESOURCES in config_entry.options:
+        return config_entry.options[CONF_RESOURCES]
+    return config_entry.data[CONF_RESOURCES]
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
@@ -51,6 +81,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
             ]
         )
     )
+
+    hass.data[DOMAIN][entry.entry_id][UNDO_UPDATE_LISTENER]()
+
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
 
